@@ -167,6 +167,71 @@ section[data-testid="stSidebar"] > div {{
     padding-top: 1rem;
 }}
 
+/* Multiselect chips: replace Streamlit's default red with brand navy */
+section[data-testid="stSidebar"] [data-baseweb="tag"] {{
+    background-color: {NAVY} !important;
+    border-color: {NAVY} !important;
+    color: white !important;
+    border-radius: 8px !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="tag"] span,
+section[data-testid="stSidebar"] [data-baseweb="tag"] svg {{
+    color: white !important;
+    fill: white !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="tag"]:hover {{
+    background-color: {NAVY_DEEP} !important;
+    border-color: {NAVY_DEEP} !important;
+}}
+/* The x button on each chip */
+section[data-testid="stSidebar"] [data-baseweb="tag"] [role="button"] {{
+    background-color: rgba(255,255,255,0.2) !important;
+    border-radius: 4px !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="tag"] [role="button"]:hover {{
+    background-color: rgba(255,255,255,0.35) !important;
+}}
+
+/* Radio button selected state: replace red with navy */
+section[data-testid="stSidebar"] [data-baseweb="radio"] [role="radio"][aria-checked="true"] {{
+    background-color: {NAVY} !important;
+    border-color: {NAVY} !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="radio"] input:checked + div {{
+    background-color: {NAVY} !important;
+    border-color: {NAVY} !important;
+}}
+/* Streamlit radio uses ::after pseudo for the inner dot — overriding via background */
+section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child > div {{
+    border-color: {NAVY} !important;
+}}
+section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child > div[style*="background"] {{
+    background-color: {NAVY} !important;
+}}
+
+/* Multiselect dropdown selected items in the popup also use navy */
+[data-baseweb="popover"] [aria-selected="true"] {{
+    background-color: rgba(0, 47, 108, 0.08) !important;
+    color: {INK} !important;
+}}
+
+/* Multiselect input border on focus */
+section[data-testid="stSidebar"] [data-baseweb="select"] > div:first-child {{
+    border-color: {BORDER} !important;
+}}
+section[data-testid="stSidebar"] [data-baseweb="select"] > div:first-child:focus-within,
+section[data-testid="stSidebar"] [data-baseweb="select"] > div:first-child[data-focus] {{
+    border-color: {NAVY} !important;
+    box-shadow: 0 0 0 2px rgba(0, 47, 108, 0.12) !important;
+}}
+
+/* Checkbox in export tab and elsewhere */
+[data-testid="stCheckbox"] input:checked + div,
+[data-baseweb="checkbox"] [aria-checked="true"] {{
+    background-color: {NAVY} !important;
+    border-color: {NAVY} !important;
+}}
+
 /* Native Streamlit bordered container → branded card.
    Streamlit 1.50+ applies border directly to the inner stVerticalBlock when border=True.
    Selector requires the title to be exactly 4 levels deep, so only the immediate card
