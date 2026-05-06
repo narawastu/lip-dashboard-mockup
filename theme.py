@@ -192,21 +192,13 @@ section[data-testid="stSidebar"] [data-baseweb="tag"] [role="button"]:hover {{
     background-color: rgba(255,255,255,0.35) !important;
 }}
 
-/* Radio button selected state: replace red with navy */
-section[data-testid="stSidebar"] [data-baseweb="radio"] [role="radio"][aria-checked="true"] {{
+/* Radio button selected state: navy outer circle, white inner dot */
+section[data-testid="stSidebar"] label:has(input[type="radio"]:checked) > div:first-child {{
     background-color: {NAVY} !important;
     border-color: {NAVY} !important;
 }}
-section[data-testid="stSidebar"] [data-baseweb="radio"] input:checked + div {{
-    background-color: {NAVY} !important;
-    border-color: {NAVY} !important;
-}}
-/* Streamlit radio uses ::after pseudo for the inner dot — overriding via background */
-section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child > div {{
-    border-color: {NAVY} !important;
-}}
-section[data-testid="stSidebar"] label[data-baseweb="radio"] > div:first-child > div[style*="background"] {{
-    background-color: {NAVY} !important;
+section[data-testid="stSidebar"] label:has(input[type="radio"]:checked) > div:first-child > div {{
+    background-color: white !important;
 }}
 
 /* Multiselect dropdown selected items in the popup also use navy */
