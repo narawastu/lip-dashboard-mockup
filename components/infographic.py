@@ -35,8 +35,11 @@ class PosterSelection:
     title: str = "Laporan Layanan Informasi Publik"
     period: str = R.CURRENT_PERIOD_LABEL
     show_header: bool = True
-    show_kpi_sxi: bool = True
-    show_kpi_ssi: bool = True
+    show_kpi_overall: bool = True
+    show_kpi_effort: bool = True
+    show_kpi_trust: bool = True
+    show_kpi_loyalty: bool = True
+    show_kpi_advokasi: bool = True
     show_kpi_total: bool = True
     show_kpi_resolution: bool = True
     show_hot_topics: bool = True
@@ -46,7 +49,7 @@ class PosterSelection:
     show_requestor_donut: bool = True
     show_sentiment: bool = True
     show_footer: bool = True
-    theme_mode: str = "Navy"  # Navy | Light | Dark
+    theme_mode: str = "Navy"
 
 
 # --- Font loading ---------------------------------------------------------
@@ -162,28 +165,35 @@ def _draw_kpi_grid(canvas: Image.Image, sel: PosterSelection, monthly: pd.DataFr
                    monthly_social: pd.DataFrame, y_start: int) -> int:
     draw = ImageDraw.Draw(canvas)
     cards = []
-    sxi_now = monthly["sxi_pct"].iloc[-1]
-    ssi_now = monthly_social["ssi_pct"].iloc[-1]
-    total = monthly["total"].iloc[-1]
-    avg_res = monthly["avg_resolution"].iloc[-1]
 
-    sxi_prev = monthly["sxi_pct"].iloc[-2]
-    ssi_prev = monthly_social["ssi_pct"].iloc[-2]
+    # 5-index satisfaction model — Top 2 Boxes %
+    INDEX_DEF = [
+        ("show_kpi_overall",  "Kepuasan Overall",  "t2b_overall",  NAVY),
+        ("show_kpi_effort",   "Customer Effort",   "t2b_effort",   (15, 118, 110)),
+        ("show_kpi_trust",    "Trust",             "t2b_trust",    NAVY_SOFT),
+        ("show_kpi_loyalty",  "Loyalty",           "t2b_loyalty",  (124, 58, 237)),
+        ("show_kpi_advokasi", "Advokasi",          "t2b_advokasi", GOLD),
+    ]
+    for flag, label, col, accent in INDEX_DEF:
+        if not getattr(sel, flag, True):
+            continue
+        if col not in monthly.columns:
+            continue
+        now = monthly[col].iloc[-1]
+        prev = monthly[col].iloc[-2]
+        cards.append((label, f"{now:.1f}", "%", now - prev, accent))
+
+    total = monthly["total"].iloc[-1]
     total_prev = monthly["total"].iloc[-2]
+    avg_res = monthly["avg_resolution"].iloc[-1]
     res_prev = monthly["avg_resolution"].iloc[-2]
 
-    if sel.show_kpi_sxi:
-        cards.append(("SXI · Experience Index", f"{sxi_now:.2f}", "%",
-                      sxi_now - sxi_prev, NAVY))
-    if sel.show_kpi_ssi:
-        cards.append(("SSI · Satisfaction Index", f"{ssi_now:.2f}", "%",
-                      ssi_now - ssi_prev, GOLD))
     if sel.show_kpi_total:
         delta = (total - total_prev) / max(total_prev, 1) * 100
-        cards.append(("Total Permohonan", f"{total:,}", "tiket", delta, NAVY_SOFT))
+        cards.append(("Total Permohonan", f"{total:,}", "tiket", delta, NAVY_DEEP))
     if sel.show_kpi_resolution:
         delta = (avg_res - res_prev) / max(res_prev, 0.1) * 100
-        cards.append(("Waktu Penyelesaian", f"{avg_res:.2f}", "jam", -delta, NAVY_DEEP))
+        cards.append(("Waktu Penyelesaian", f"{avg_res:.2f}", "jam", -delta, RED))
 
     if not cards:
         return y_start

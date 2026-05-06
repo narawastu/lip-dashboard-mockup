@@ -7,6 +7,24 @@ CURRENT_MONTH = 5
 SXI_TARGET = 84.0
 SSI_TARGET = 83.0
 
+# 5-dimension satisfaction model: (key, label, target_t2b%, icon)
+INDICES = [
+    ("overall",  "Kepuasan Overall",  86.0, "💬"),
+    ("effort",   "Customer Effort",   78.0, "👤"),
+    ("trust",    "Trust",             88.0, "🛡"),
+    ("loyalty",  "Loyalty",           82.0, "❤"),
+    ("advokasi", "Advokasi",          76.0, "📣"),
+]
+
+# Demografi
+AGE_BRACKETS = [
+    ("18-25 tahun", 0.22),
+    ("26-35 tahun", 0.36),
+    ("36-45 tahun", 0.26),
+    (">45 tahun",   0.16),
+]
+GENDERS = [("Perempuan", 0.51), ("Laki-laki", 0.49)]
+
 # Matches Jun 2025 benchmark donut (Media Komunikasi)
 CHANNELS = [
     ("Email", 0.3324),
@@ -58,6 +76,17 @@ PROVINCES = [
     "Nusa Tenggara Barat", "Nusa Tenggara Timur", "Papua", "Maluku", "Bengkulu",
     "Jambi",
 ]
+
+# Wilayah Koordinasi: 5 regional groupings of provinces
+WILAYAH = {
+    "Jawa": ["DKI Jakarta", "Jawa Barat", "Jawa Tengah", "Jawa Timur", "Banten", "DI Yogyakarta"],
+    "Sumatera": ["Aceh", "Sumatera Utara", "Sumatera Barat", "Sumatera Selatan", "Riau", "Lampung", "Bengkulu", "Jambi", "Kepulauan Riau"],
+    "Kalimantan": ["Kalimantan Timur", "Kalimantan Selatan", "Kalimantan Barat"],
+    "Sulawesi, Maluku, Papua": ["Sulawesi Selatan", "Sulawesi Utara", "Sulawesi Tengah", "Maluku", "Papua"],
+    "Bali, Nusa Tenggara": ["Bali", "Nusa Tenggara Barat", "Nusa Tenggara Timur"],
+}
+PROVINCE_TO_WILAYAH = {p: w for w, ps in WILAYAH.items() for p in ps}
+WILAYAH_NAMES = list(WILAYAH.keys())
 
 # Social platforms for SSI
 PLATFORMS = [

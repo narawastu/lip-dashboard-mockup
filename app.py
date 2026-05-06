@@ -1,13 +1,18 @@
 """Bank Indonesia — Dashboard Layanan Informasi Publik (LIP).
 Streamlit mockup for client presentation. Mei 2026."""
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=".*keyword arguments have been deprecated.*")
+warnings.filterwarnings("ignore", message=".*use_container_width.*")
+
 import streamlit as st
 
 import theme as T
 from data import generator as G
 from components import header as H
 from components.filters import render_sidebar
-from tabs import overview, sxi, ssi, export, operations
+from tabs import overview, sxi, ssi, export, operations, per_kanal
 
 
 def main() -> None:
@@ -33,9 +38,10 @@ def main() -> None:
         social = G.generate_social()
 
     # Tabs
-    t1, t2, t3, t4, t5 = st.tabs([
+    t1, t2, t3, t4, t5, t6 = st.tabs([
         "📊 Ringkasan Eksekutif",
-        "⭐ SXI · Experience",
+        "⭐ Detail Indeks",
+        "🎯 Per Kanal",
         "💬 SSI · Sentimen Publik",
         "🖼️ Ekspor Infografis",
         "⚙️ Operasional & Drill-Down",
@@ -46,10 +52,12 @@ def main() -> None:
     with t2:
         sxi.render(tickets, filters)
     with t3:
-        ssi.render(social, filters)
+        per_kanal.render(tickets, filters)
     with t4:
-        export.render(tickets, social)
+        ssi.render(social, filters)
     with t5:
+        export.render(tickets, social)
+    with t6:
         operations.render(tickets, filters)
 
 

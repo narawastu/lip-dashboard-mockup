@@ -17,11 +17,14 @@ _chart_counter = itertools.count()
 
 def show(fig: go.Figure, **kwargs) -> None:
     """Wrapper around st.plotly_chart that auto-generates a unique key."""
-    kwargs.setdefault("width", "stretch")
-    kwargs.setdefault("config", {"displayModeBar": False})
+    # Use config dict for Plotly options (no toolbar) — Streamlit 1.50+ wants
+    # everything in `config` rather than top-level kwargs.
+    kwargs.setdefault("use_container_width", True)
+    config = kwargs.pop("config", {}) or {}
+    config.setdefault("displayModeBar", False)
     if "key" not in kwargs:
         kwargs["key"] = f"chart_{next(_chart_counter)}"
-    st.plotly_chart(fig, **kwargs)
+    st.plotly_chart(fig, config=config, **kwargs)
 
 
 def _apply(layout_overrides=None) -> dict:
@@ -295,6 +298,64 @@ def stacked_bar(df: pd.DataFrame, x: str, y_cols: list, colors: list,
     layout = _apply({"height": height, "barmode": "stack",
                      "legend": dict(orientation="h", y=-0.2)})
     layout["yaxis"]["ticksuffix"] = "%"
+    fig.update_layout(**layout)
+    return fig
+
+
+LIKERT_LABELS = ["Sangat Puas", "Puas", "Netral", "Tidak Puas", "Sangat Tidak Puas"]
+LIKERT_COLORS = [T.POS, "#65A30D", "#94A3B8", "#F97316", T.NEG]
+
+
+def likert_stack(rows: list, height: int = 280, show_legend: bool = True) -> go.Figure:
+    """Horizontal stacked bar showing 5-point Likert distribution per row.
+    rows: list of (label, dist_dict) where dist_dict has keys
+        'Sangat Puas', 'Puas', 'Netral', 'Tidak Puas', 'Sangat Tidak Puas'."""
+    fig = go.Figure()
+    labels = [r[0] for r in rows]
+    for level, color in zip(LIKERT_LABELS, LIKERT_COLORS):
+        values = [r[1].get(level, 0) for r in rows]
+        # Show inline % only when slice is large enough
+        text = [f"{v:.1f}%" if v >= 6 else "" for v in values]
+        fig.add_trace(go.Bar(
+            x=values, y=labels, orientation="h", name=level,
+            marker=dict(color=color, line=dict(color="white", width=1)),
+            text=text, textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="white", size=11, family="Inter"),
+            hovertemplate=f"<b>%{{y}}</b><br>{level}: %{{x:.1f}}%<extra></extra>",
+        ))
+    layout = _apply({
+        "height": height, "barmode": "stack",
+        "showlegend": show_legend,
+        "legend": dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
+                       font=dict(size=11, color=T.MUTED)),
+        "margin": dict(l=8, r=8, t=8, b=40 if show_legend else 8),
+    })
+    layout["xaxis"]["range"] = [0, 100]
+    layout["xaxis"]["ticksuffix"] = "%"
+    layout["xaxis"]["showgrid"] = False
+    fig.update_layout(**layout)
+    return fig
+
+
+def multi_line_trend(df: pd.DataFrame, x: str, y_cols: list, colors: list,
+                     labels: list = None, height: int = 320,
+                     y_suffix: str = "%") -> go.Figure:
+    """Multi-line chart for tracking several metrics over time."""
+    labels = labels or y_cols
+    fig = go.Figure()
+    for col, color, lbl in zip(y_cols, colors, labels):
+        fig.add_trace(go.Scatter(
+            x=df[x], y=df[col], mode="lines+markers", name=lbl,
+            line=dict(color=color, width=2.5, shape="spline", smoothing=0.6),
+            marker=dict(size=6, color=color, line=dict(color="white", width=1.5)),
+            hovertemplate=f"<b>{lbl}</b><br>%{{x}}: %{{y:.2f}}{y_suffix}<extra></extra>",
+        ))
+    layout = _apply({
+        "height": height,
+        "legend": dict(orientation="h", y=-0.18, x=0.5, xanchor="center",
+                       font=dict(size=11, color=T.MUTED)),
+    })
+    layout["yaxis"]["ticksuffix"] = y_suffix
     fig.update_layout(**layout)
     return fig
 

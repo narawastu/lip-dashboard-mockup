@@ -37,12 +37,15 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
         c1, c2 = st.columns(2)
         with c1:
             show_header = st.checkbox("Header + judul", value=True)
-            show_kpi_sxi = st.checkbox("KPI: SXI", value=True)
-            show_kpi_ssi = st.checkbox("KPI: SSI", value=True)
-            show_kpi_total = st.checkbox("KPI: Total tiket", value=True)
-            show_kpi_resolution = st.checkbox("KPI: Waktu penyelesaian", value=True)
-            show_hot_topics = st.checkbox("7 Hot Topics", value=True)
+            show_kpi_overall = st.checkbox("KPI: Kepuasan Overall", value=True)
+            show_kpi_effort = st.checkbox("KPI: Customer Effort", value=True)
+            show_kpi_trust = st.checkbox("KPI: Trust", value=True)
+            show_kpi_loyalty = st.checkbox("KPI: Loyalty", value=True)
+            show_kpi_advokasi = st.checkbox("KPI: Advokasi", value=True)
+            show_kpi_total = st.checkbox("KPI: Total tiket", value=False)
+            show_kpi_resolution = st.checkbox("KPI: Waktu penyelesaian", value=False)
         with c2:
+            show_hot_topics = st.checkbox("7 Hot Topics", value=True)
             show_trend = st.checkbox("Tren 12 bulan", value=True)
             show_channels = st.checkbox("Donut: Media Komunikasi", value=True)
             show_classification = st.checkbox("Donut: Klasifikasi", value=True)
@@ -59,8 +62,11 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
         title=title,
         period=period,
         show_header=show_header,
-        show_kpi_sxi=show_kpi_sxi,
-        show_kpi_ssi=show_kpi_ssi,
+        show_kpi_overall=show_kpi_overall,
+        show_kpi_effort=show_kpi_effort,
+        show_kpi_trust=show_kpi_trust,
+        show_kpi_loyalty=show_kpi_loyalty,
+        show_kpi_advokasi=show_kpi_advokasi,
         show_kpi_total=show_kpi_total,
         show_kpi_resolution=show_kpi_resolution,
         show_hot_topics=show_hot_topics,
@@ -74,9 +80,10 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
 
     with right, card("Live Preview (1080×1920)", elevated=True):
         cache_key = (
-            title, period, show_header, show_kpi_sxi, show_kpi_ssi, show_kpi_total,
-            show_kpi_resolution, show_hot_topics, show_trend, show_channels,
-            show_classification, show_requestor, show_sentiment, show_footer,
+            title, period, show_header,
+            show_kpi_overall, show_kpi_effort, show_kpi_trust, show_kpi_loyalty, show_kpi_advokasi,
+            show_kpi_total, show_kpi_resolution, show_hot_topics, show_trend,
+            show_channels, show_classification, show_requestor, show_sentiment, show_footer,
         )
 
         # Render only when the user explicitly clicks Generate.

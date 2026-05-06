@@ -12,30 +12,39 @@ from data import generator as G, reference as R
 from components import header as H
 from components import charts as C
 from components.card import card
+from components import wilayah as W
 
 
 def _scope(tickets, filters):
     return G.filter_tickets(
         tickets, channels=filters["channels"], topics=filters["topics"],
-        requestors=filters["requestors"], provinces=filters["provinces"] or None,
+        requestors=filters["requestors"], wilayah=filters["wilayah"] or None,
+        usia=filters["usia"] or None, gender=filters["gender"] or None,
         date_range=filters["date_range"],
     )
 
 
-def _province_choropleth(df: pd.DataFrame) -> go.Figure:
-    """Simulate a regional bar (Plotly choropleth would need GeoJSON; we use bar for cleanliness)."""
-    counts = df.groupby("province").size().sort_values(ascending=True)
+def _wilayah_volume_bar(df: pd.DataFrame) -> go.Figure:
+    """Per-wilayah ticket volume."""
+    counts = (
+        df.groupby("wilayah").size()
+        .reindex(R.WILAYAH_NAMES, fill_value=0)
+        .sort_values(ascending=True)
+    )
     fig = go.Figure(go.Bar(
         x=counts.values, y=counts.index, orientation="h",
         marker=dict(color=counts.values, colorscale=[[0, "#E2E8F0"], [0.6, "#3D74C2"], [1, T.NAVY]],
                     line=dict(width=0)),
+        text=[f"{v:,}" for v in counts.values],
+        textposition="outside", textfont=dict(size=11, color=T.INK, family="Inter"),
+        cliponaxis=False,
         hovertemplate="<b>%{y}</b><br>%{x:,} tiket<extra></extra>",
     ))
     layout = dict(T.PLOTLY_LAYOUT)
-    layout["height"] = 600
+    layout["height"] = 240
     layout["xaxis"] = dict(showgrid=False, showticklabels=False, zeroline=False)
     layout["yaxis"] = dict(gridcolor="rgba(0,0,0,0)", zeroline=False)
-    layout["margin"] = dict(l=0, r=20, t=8, b=8)
+    layout["margin"] = dict(l=8, r=80, t=8, b=8)
     fig.update_layout(**layout)
     return fig
 
@@ -117,23 +126,88 @@ def render(tickets: pd.DataFrame, filters: dict) -> None:
         </div>
         """, unsafe_allow_html=True)
 
-    with c6, card("Distribusi Permohonan per Provinsi"):
-        C.show(_province_choropleth(df))
+    with c6, card("Volume Permohonan per Wilayah Koordinasi"):
+        C.show(_wilayah_volume_bar(df))
+
+    # ===== Tren per Wilayah Koordinasi (categorization + table) =====
+    st.markdown("<div style='margin-top:22px;'></div>", unsafe_allow_html=True)
+    H.section(
+        "Peta Tren Kepuasan per Wilayah Koordinasi",
+        "Klasifikasi pola tren kepuasan Overall dalam 3 bulan terakhir",
+    )
+
+    buckets = W.categorize_wilayah_trends(tickets, "score_overall", window=3)
+
+    pattern_palette = {
+        "naik_terus":  ("#16A34A", "Naik Terus", "↗",
+                        "Tren naik konsisten dalam 3 bulan terakhir"),
+        "naik_turun":  ("#3B82F6", "Naik → Turun", "↗→↘",
+                        "Naik di awal periode, lalu turun di bulan terakhir"),
+        "turun_naik":  ("#7C3AED", "Turun → Naik", "↘→↗",
+                        "Turun di awal periode, lalu naik di bulan terakhir"),
+        "turun_terus": ("#DC2626", "Turun Terus", "↘",
+                        "Tren turun konsisten dalam 3 bulan terakhir"),
+        "datar":       ("#94A3B8", "Stabil", "→",
+                        "Tidak ada perubahan signifikan"),
+    }
+
+    pattern_cols = st.columns(4)
+    for col_box, key in zip(pattern_cols, ["naik_terus", "naik_turun", "turun_naik", "turun_terus"]):
+        color, lbl, arrow, desc = pattern_palette[key]
+        items = buckets.get(key, [])
+        with col_box:
+            list_html = ""
+            if items:
+                for w_name, vals, latest in items:
+                    list_html += (
+                        f"<div style='display:flex;justify-content:space-between;"
+                        f"align-items:center;padding:6px 0;border-top:1px solid {T.BORDER};font-size:12px;'>"
+                        f"<span style='color:{T.INK};'>{w_name}</span>"
+                        f"<span style='color:{T.MUTED};font-variant-numeric:tabular-nums;'>{latest:.1f}%</span>"
+                        f"</div>"
+                    )
+            else:
+                list_html = (
+                    f"<div style='padding:14px 0;color:{T.SUBTLE};font-size:12px;text-align:center;'>"
+                    f"Tidak ada wilayah</div>"
+                )
+            st.markdown(f"""
+            <div style='background:{T.SURFACE};border:1px solid {T.BORDER};border-radius:12px;padding:14px 16px;'>
+              <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;'>
+                <span style='font-weight:700;color:{color};font-size:14px;'>{lbl} <span style='font-size:13px;'>({arrow})</span></span>
+                <span style='font-weight:700;color:{T.INK};font-size:18px;'>{len(items)}</span>
+              </div>
+              <div style='font-size:11px;color:{T.MUTED};margin-bottom:6px;line-height:1.4;'>{desc}</div>
+              {list_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Detail table per wilayah with sparklines isn't trivial in Streamlit; show t2b table.
+    st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
+    with card("Detail T2B per Wilayah (5 Indeks)"):
+        rows = []
+        for w_name in R.WILAYAH_NAMES:
+            sub = df[df["wilayah"] == w_name]
+            row = {"Wilayah": w_name, "Responden": len(sub)}
+            for k, label, _t, _i in R.INDICES:
+                row[label] = round(G.top2box(sub[f"score_{k}"]), 1) if len(sub) else 0
+            rows.append(row)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True, height=240)
 
     # Tickets table
     st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
     H.section("Tabel Tiket Terkini", "50 tiket terbaru sesuai filter")
     sample = df.sort_values("timestamp", ascending=False).head(50)[
-        ["timestamp", "channel", "topic", "requestor", "province", "status",
-         "resolution_h", "sxi_score", "sla_met"]
+        ["timestamp", "channel", "topic", "requestor", "wilayah", "status",
+         "resolution_h", "score_overall", "sla_met"]
     ].copy()
-    sample.columns = ["Waktu", "Kanal", "Topik", "Pemohon", "Provinsi", "Status",
-                      "Waktu (jam)", "Skor SXI", "SLA"]
+    sample.columns = ["Waktu", "Kanal", "Topik", "Pemohon", "Wilayah", "Status",
+                      "Waktu (jam)", "Skor Overall", "SLA"]
     sample["Waktu (jam)"] = sample["Waktu (jam)"].round(2)
     sample["SLA"] = sample["SLA"].map({True: "✓", False: "✗"})
 
     st.dataframe(sample, width="stretch", height=420, hide_index=True)
 
     csv = sample.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇ Unduh CSV", data=csv, file_name="tiket-lip-bi.csv",
+    st.download_button("⬇ Unduh CSV", data=csv, file_name="tiket-lip.csv",
                        mime="text/csv")
