@@ -132,7 +132,7 @@ def render(tickets: pd.DataFrame, filters: dict) -> None:
     sample["Waktu (jam)"] = sample["Waktu (jam)"].round(2)
     sample["SLA"] = sample["SLA"].map({True: "✓", False: "✗"})
 
-    st.dataframe(sample, use_container_width=True, height=420, hide_index=True)
+    st.dataframe(sample, width="stretch", height=420, hide_index=True)
 
     csv = sample.to_csv(index=False).encode("utf-8")
     st.download_button("⬇ Unduh CSV", data=csv, file_name="tiket-lip-bi.csv",

@@ -13,6 +13,33 @@ from components.card import card
 from components.infographic import PosterSelection, render_poster
 
 
+def _ensure_chrome_installed() -> bool:
+    """Kaleido v1+ needs a Chrome binary to render Plotly to PNG.
+    On hosts without it (Streamlit Cloud, etc.), install on first use.
+    Returns True on success."""
+    try:
+        import kaleido
+        kaleido.get_chrome_sync()
+        return True
+    except Exception as exc:
+        st.error(f"Gagal menyiapkan engine render: {exc}")
+        return False
+
+
+def _try_render(tickets, social, selection):
+    """Render the poster, auto-installing Chrome if needed."""
+    try:
+        return render_poster(tickets, social, selection)
+    except Exception as exc:
+        # Chrome missing → install once, then retry
+        if "Chrome" in str(exc) or "kaleido" in str(exc).lower():
+            with st.spinner("Menyiapkan engine render (sekali setup, ~30 detik)…"):
+                if not _ensure_chrome_installed():
+                    return None, None
+            return render_poster(tickets, social, selection)
+        raise
+
+
 def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
     H.section("Ekspor Infografis", "Komposisi laporan poster — pilih elemen, lalu unduh sebagai PNG atau PDF")
 
@@ -47,7 +74,7 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
 
         st.markdown("---")
 
-        generate = st.button("Generate Preview", type="primary", use_container_width=True)
+        generate = st.button("Generate Preview", type="primary", width="stretch")
         st.caption("Preview di sebelah kanan akan diperbarui setelah tombol ditekan.")
 
     selection = PosterSelection(
@@ -74,10 +101,13 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
             show_classification, show_requestor, show_sentiment, show_footer,
         )
 
-        if generate or "poster_cache" not in st.session_state:
+        # Render only when the user explicitly clicks Generate.
+        # First-load: show a placeholder so a missing Chrome engine doesn't crash the tab.
+        if generate:
             with st.spinner("Merender poster…"):
-                png_bytes, pdf_bytes = render_poster(tickets, social, selection)
-            st.session_state["poster_cache"] = {"png": png_bytes, "pdf": pdf_bytes, "key": cache_key}
+                png_bytes, pdf_bytes = _try_render(tickets, social, selection)
+            if png_bytes is not None:
+                st.session_state["poster_cache"] = {"png": png_bytes, "pdf": pdf_bytes, "key": cache_key}
 
         cache = st.session_state.get("poster_cache")
         if cache:
@@ -88,19 +118,31 @@ def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:
                 st.download_button(
                     "⬇ Unduh PNG (Hi-Res)",
                     data=cache["png"],
-                    file_name=f"laporan-lip-bi-{period.lower().replace(' ', '-')}.png",
+                    file_name=f"laporan-{period.lower().replace(' ', '-')}.png",
                     mime="image/png",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary",
                 )
             with d2:
                 st.download_button(
                     "⬇ Unduh PDF",
                     data=cache["pdf"],
-                    file_name=f"laporan-lip-bi-{period.lower().replace(' ', '-')}.pdf",
+                    file_name=f"laporan-{period.lower().replace(' ', '-')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             if cache["key"] != cache_key:
                 st.info("Konfigurasi berubah. Klik 'Generate Preview' untuk memperbarui.")
+        else:
+            st.markdown(f"""
+            <div style='padding:60px 20px;text-align:center;color:{T.MUTED};
+                        background:{T.BG_TINT};border-radius:12px;border:1px dashed {T.BORDER_STRONG};'>
+              <div style='font-size:32px;margin-bottom:12px;'>🖼️</div>
+              <div style='font-weight:600;color:{T.INK};margin-bottom:6px;'>Preview belum tersedia</div>
+              <div style='font-size:13px;'>Pilih bagian yang ingin dimasukkan, lalu klik <b>Generate Preview</b>.</div>
+              <div style='font-size:12px;margin-top:8px;color:{T.SUBTLE};'>
+                Render pertama kali pada server cloud bisa memakan ~30 detik untuk setup engine.
+              </div>
+            </div>
+            """, unsafe_allow_html=True)

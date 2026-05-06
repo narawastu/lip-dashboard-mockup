@@ -17,7 +17,7 @@ _chart_counter = itertools.count()
 
 def show(fig: go.Figure, **kwargs) -> None:
     """Wrapper around st.plotly_chart that auto-generates a unique key."""
-    kwargs.setdefault("use_container_width", True)
+    kwargs.setdefault("width", "stretch")
     kwargs.setdefault("config", {"displayModeBar": False})
     if "key" not in kwargs:
         kwargs["key"] = f"chart_{next(_chart_counter)}"
