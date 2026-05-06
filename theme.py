@@ -217,9 +217,8 @@ section[data-testid="stSidebar"] [data-baseweb="select"] > div:first-child[data-
     box-shadow: 0 0 0 2px rgba(0, 47, 108, 0.12) !important;
 }}
 
-/* Checkbox in export tab and elsewhere */
-[data-testid="stCheckbox"] input:checked + div,
-[data-baseweb="checkbox"] [aria-checked="true"] {{
+/* Checkbox: navy filled square when checked (target only the visible checkbox icon, not the label) */
+label:has(input[type="checkbox"]:checked) > span:first-child {{
     background-color: {NAVY} !important;
     border-color: {NAVY} !important;
 }}
