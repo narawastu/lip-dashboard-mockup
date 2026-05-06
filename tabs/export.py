@@ -13,31 +13,9 @@ from components.card import card
 from components.infographic import PosterSelection, render_poster
 
 
-def _ensure_chrome_installed() -> bool:
-    """Kaleido v1+ needs a Chrome binary to render Plotly to PNG.
-    On hosts without it (Streamlit Cloud, etc.), install on first use.
-    Returns True on success."""
-    try:
-        import kaleido
-        kaleido.get_chrome_sync()
-        return True
-    except Exception as exc:
-        st.error(f"Gagal menyiapkan engine render: {exc}")
-        return False
-
-
 def _try_render(tickets, social, selection):
-    """Render the poster, auto-installing Chrome if needed."""
-    try:
-        return render_poster(tickets, social, selection)
-    except Exception as exc:
-        # Chrome missing → install once, then retry
-        if "Chrome" in str(exc) or "kaleido" in str(exc).lower():
-            with st.spinner("Menyiapkan engine render (sekali setup, ~30 detik)…"):
-                if not _ensure_chrome_installed():
-                    return None, None
-            return render_poster(tickets, social, selection)
-        raise
+    """Render the poster. Pure Pillow now, no browser deps."""
+    return render_poster(tickets, social, selection)
 
 
 def render(tickets: pd.DataFrame, social: pd.DataFrame) -> None:

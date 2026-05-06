@@ -1,23 +1,18 @@
 """Compose a poster-style infographic from selected metrics.
 
-Pillow is the canvas; Plotly + Kaleido renders individual charts to PNG bytes.
-Returns (png_bytes, pdf_bytes).
+Pure Pillow rendering, no browser dependency. Returns (png_bytes, pdf_bytes).
 """
 
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass, field
-from typing import Optional
+import math
+from dataclasses import dataclass
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 import theme as T
 from data import generator as G, reference as R
-from components import charts as C
 
 
 W, H = 1080, 2000
@@ -73,17 +68,6 @@ def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
 
 
 # --- Plotly → PNG helper --------------------------------------------------
-
-def _fig_to_png(fig: go.Figure, width: int, height: int) -> Image.Image:
-    """Render Plotly figure to PIL image via kaleido, resized to exact target dimensions."""
-    fig.update_layout(width=width, height=height, paper_bgcolor="white", plot_bgcolor="white")
-    img_bytes = fig.to_image(format="png", scale=2)
-    img = Image.open(io.BytesIO(img_bytes))
-    # Kaleido at scale=2 gives 2x image — resize back to target
-    if img.size != (width, height):
-        img = img.resize((width, height), Image.LANCZOS)
-    return img.convert("RGB")
-
 
 # --- Drawing primitives ---------------------------------------------------
 
@@ -226,44 +210,146 @@ def _draw_section_title(draw: ImageDraw.ImageDraw, x, y, title, sub=None) -> int
     return y + 32
 
 
+def _hex_to_rgb(hex_color: str) -> tuple:
+    h = hex_color.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
 def _draw_hot_topics(canvas, sel, tickets_recent, y_start):
+    """Pure-Pillow horizontal bar chart."""
     draw = ImageDraw.Draw(canvas)
     y = _draw_section_title(draw, 64, y_start + 8, "7 Hot Topics", "Topik permohonan terbanyak bulan ini")
     box_w = W - 128
     box_h = 320
-    _rounded_rect(draw, (64, y, 64 + box_w, y + box_h), 14, fill=SURFACE, outline=BORDER, width=1)
+    box_x, box_y = 64, y
+    _rounded_rect(draw, (box_x, box_y, box_x + box_w, box_y + box_h), 14, fill=SURFACE, outline=BORDER, width=1)
 
     topic_counts = tickets_recent[tickets_recent["topic"] != "Lainnya"]["topic"].value_counts().head(7)
     pcts = (topic_counts / max(len(tickets_recent), 1) * 100)
+    items = list(zip(topic_counts.index.tolist(), pcts.values.tolist()))
+    items.sort(key=lambda t: t[1], reverse=True)
 
-    fig = C.hbar(topic_counts.index.tolist(), pcts.values.tolist(),
-                 height=box_h - 24, value_suffix="%")
-    fig.update_layout(margin=dict(l=8, r=80, t=8, b=8))
-    chart = _fig_to_png(fig, box_w - 24, box_h - 24)
-    canvas.paste(chart, (76, y + 12))
+    if not items:
+        return y + box_h + 24
+
+    # Layout: each row has a label on the left, bar on the right
+    row_h = (box_h - 40) // len(items)
+    label_w = 280
+    bar_x = box_x + 24 + label_w
+    bar_max_w = box_w - (24 + label_w) - 80  # leave 80px for the % label
+    max_pct = max(p for _, p in items) or 1
+
+    bar_color = NAVY
+    for i, (label, pct) in enumerate(items):
+        ry = box_y + 20 + i * row_h + (row_h - 22) // 2
+        # Label
+        _text(draw, (box_x + 24, ry + 11), label, _font(12), fill=INK, anchor="lm")
+        # Bar
+        bw = int((pct / max_pct) * bar_max_w)
+        _rounded_rect(draw, (bar_x, ry, bar_x + bw, ry + 22), 4, fill=bar_color)
+        # Value label
+        _text(draw, (bar_x + bw + 8, ry + 11), f"{pct:.2f}%",
+              _font(11, bold=True), fill=INK, anchor="lm")
     return y + box_h + 24
 
 
 def _draw_trend(canvas, sel, monthly, y_start):
+    """Pure-Pillow smoothed line chart with gradient fill."""
     draw = ImageDraw.Draw(canvas)
     y = _draw_section_title(draw, 64, y_start + 8, "Tren 12 Bulan", "Volume permohonan Jun 2025 → Mei 2026")
     box_w = W - 128
     box_h = 220
-    _rounded_rect(draw, (64, y, 64 + box_w, y + box_h), 14, fill=SURFACE, outline=BORDER, width=1)
+    box_x, box_y = 64, y
+    _rounded_rect(draw, (box_x, box_y, box_x + box_w, box_y + box_h), 14, fill=SURFACE, outline=BORDER, width=1)
 
     df = monthly.copy()
     df["label"] = df["yearmonth"].apply(G.label_ym)
-    fig = C.line_trend(df, "label", "total", height=box_h - 24)
-    fig.update_layout(margin=dict(l=40, r=20, t=10, b=30))
-    chart = _fig_to_png(fig, box_w - 24, box_h - 24)
-    canvas.paste(chart, (76, y + 12))
+    values = df["total"].tolist()
+    labels = df["label"].tolist()
+    if not values:
+        return y + box_h + 24
+
+    # Plot area
+    margin_l, margin_r, margin_t, margin_b = 64, 32, 24, 36
+    plot_x0 = box_x + margin_l
+    plot_y0 = box_y + margin_t
+    plot_x1 = box_x + box_w - margin_r
+    plot_y1 = box_y + box_h - margin_b
+    plot_w = plot_x1 - plot_x0
+    plot_h = plot_y1 - plot_y0
+
+    vmin, vmax = min(values), max(values)
+    span = max(vmax - vmin, 1)
+    pad_v = span * 0.1
+    y_lo, y_hi = vmin - pad_v, vmax + pad_v
+
+    def to_xy(i, v):
+        x = plot_x0 + (i / max(len(values) - 1, 1)) * plot_w
+        py = plot_y1 - ((v - y_lo) / (y_hi - y_lo)) * plot_h
+        return (x, py)
+
+    # Gridlines + y-axis ticks (2 ticks: low and high band)
+    grid_color = (228, 233, 242)
+    for tick_v in (y_lo, (y_lo + y_hi) / 2, y_hi):
+        _, ty = to_xy(0, tick_v)
+        draw.line([(plot_x0, ty), (plot_x1, ty)], fill=grid_color, width=1)
+        # tick label
+        _text(draw, (plot_x0 - 8, ty), f"{int(tick_v):,}", _font(10), fill=MUTED, anchor="rm")
+
+    # Fill polygon under the line
+    points = [to_xy(i, v) for i, v in enumerate(values)]
+    fill_poly = [(plot_x0, plot_y1)] + points + [(plot_x1, plot_y1)]
+    fill_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    fl_draw = ImageDraw.Draw(fill_layer)
+    fl_draw.polygon(fill_poly, fill=(*NAVY, 28))
+    canvas.paste(fill_layer, (0, 0), fill_layer)
+
+    # Line
+    draw = ImageDraw.Draw(canvas)
+    for a, b in zip(points, points[1:]):
+        draw.line([a, b], fill=NAVY, width=3)
+
+    # Endpoint dots
+    for x, py in points:
+        draw.ellipse((x - 3, py - 3, x + 3, py + 3), fill="white", outline=NAVY, width=2)
+
+    # X-axis labels (every other one to avoid clutter)
+    for i, lab in enumerate(labels):
+        if i % 2 != 0 and i != len(labels) - 1:
+            continue
+        x, _ = to_xy(i, values[i])
+        _text(draw, (x, plot_y1 + 16), lab, _font(10), fill=MUTED, anchor="mm")
+
     return y + box_h + 24
 
 
+def _draw_donut(canvas, cx, cy, outer_r, inner_r, values, colors):
+    """Draw a donut by drawing colored arcs as wedges + a white inner circle."""
+    draw = ImageDraw.Draw(canvas)
+    total = sum(values) or 1
+    # Use anti-aliased composite by drawing on a 2x layer then downscaling
+    scale = 2
+    sx, sy = cx * scale, cy * scale
+    sr_o, sr_i = outer_r * scale, inner_r * scale
+    layer_size = (canvas.size[0] * scale, canvas.size[1] * scale)
+    # Just draw on canvas directly at single resolution — Pillow's pieslice is decent enough
+    angle = -90.0
+    for v, col in zip(values, colors):
+        if v <= 0:
+            continue
+        sweep = (v / total) * 360
+        bbox = (cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r)
+        draw.pieslice(bbox, angle, angle + sweep, fill=col, outline="white", width=1)
+        angle += sweep
+    # Inner circle to make it a donut
+    draw.ellipse((cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r), fill="white")
+
+
 def _draw_donut_row(canvas, sel, tickets_recent, y_start):
+    """Pure-Pillow donut + legend for each composition card."""
     draw = ImageDraw.Draw(canvas)
     y = _draw_section_title(draw, 64, y_start + 8, "Komposisi Permohonan",
-                            "Media komunikasi · klasifikasi · kategori pemohon")
+                            "Media komunikasi, klasifikasi, kategori pemohon")
 
     donuts = []
     if sel.show_channels_donut:
@@ -288,25 +374,48 @@ def _draw_donut_row(canvas, sel, tickets_recent, y_start):
         x = 64 + i * (card_w + pad)
         _rounded_rect(draw, (x, y, x + card_w, y + card_h), 14, fill=SURFACE, outline=BORDER, width=1)
         _text(draw, (x + card_w // 2, y + 22), title, _font(13, bold=True), fill=MUTED, anchor="mm")
-        # Use insidetext for percentages, legend for labels — avoids cropping
-        colors = (palette or T.CAT_PALETTE)[: len(labels)]
-        fig = go.Figure(go.Pie(
-            labels=labels, values=values, hole=0.55, sort=False,
-            marker=dict(colors=colors, line=dict(color="white", width=1.5)),
-            textposition="inside", textinfo="percent",
-            insidetextorientation="horizontal",
-            textfont=dict(size=11, color="white", family="Inter"),
-        ))
-        fig.update_layout(
-            font=dict(family="Inter", size=10, color="#0F172A"),
-            paper_bgcolor="white", plot_bgcolor="white",
-            margin=dict(l=8, r=8, t=8, b=8),
-            showlegend=True,
-            legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center",
-                        font=dict(size=9), itemsizing="constant"),
-        )
-        chart = _fig_to_png(fig, card_w - 16, card_h - 50)
-        canvas.paste(chart, (x + 8, y + 40))
+
+        # Palette as RGB tuples
+        palette_hex = palette or T.CAT_PALETTE
+        colors = [_hex_to_rgb(c) for c in palette_hex[: len(labels)]]
+
+        # Donut
+        cx = x + card_w // 2
+        cy = y + 60 + 110
+        outer_r, inner_r = 90, 56
+        _draw_donut(canvas, cx, cy, outer_r, inner_r, values, colors)
+        draw = ImageDraw.Draw(canvas)
+
+        # Inline percent labels for the largest 3 slices, written outside the donut
+        total = sum(values) or 1
+        angle = -90.0
+        for v, col in zip(values, colors):
+            if v <= 0:
+                angle += 0
+                continue
+            sweep = (v / total) * 360
+            mid_a = math.radians(angle + sweep / 2)
+            pct = v / total * 100
+            if pct >= 5:
+                lx = cx + math.cos(mid_a) * (outer_r * 0.62)
+                ly = cy + math.sin(mid_a) * (outer_r * 0.62)
+                _text(draw, (lx, ly), f"{pct:.0f}%", _font(11, bold=True), fill="white", anchor="mm")
+            angle += sweep
+
+        # Legend below
+        legend_y = y + card_h - 80
+        cols_per_row = 2
+        col_w = (card_w - 28) // cols_per_row
+        for j, (lab, col) in enumerate(zip(labels, colors)):
+            row = j // cols_per_row
+            col_idx = j % cols_per_row
+            lx = x + 14 + col_idx * col_w
+            ly = legend_y + row * 18
+            if ly + 14 > y + card_h - 4:
+                break
+            draw.rectangle((lx, ly + 4, lx + 8, ly + 12), fill=col)
+            _text(draw, (lx + 14, ly + 8), str(lab)[:24], _font(10), fill=MUTED, anchor="lm")
+
     return y + card_h + 24
 
 

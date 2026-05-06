@@ -2,6 +2,5 @@ streamlit>=1.32.0
 pandas>=2.1.0
 numpy>=1.26.0
 plotly>=5.20.0
-kaleido>=1.0.0
 pillow>=10.2.0
 faker>=24.0.0
