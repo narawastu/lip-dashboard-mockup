@@ -39,20 +39,21 @@ def _resolve_period(choice: str, custom_range=None) -> tuple:
 
 
 def render_sidebar() -> dict:
-    # Reset state if requested
+    """Sidebar holds GLOBAL filters only — those that define what data is in view.
+    Analytical filters (wilayah, demografi) live inline on pages where they apply."""
+    # Reset only sidebar filter keys if requested
     if st.session_state.get("_filter_reset_pending"):
         st.session_state["_filter_reset_pending"] = False
         for key in list(st.session_state.keys()):
-            if key.startswith("flt_"):
+            if key.startswith("flt_") and not key.startswith("flt_pk_"):
                 del st.session_state[key]
 
     with st.sidebar:
         st.markdown(
-            "<div style='display:flex;justify-content:space-between;align-items:center;'>"
             "<div style='font-weight:700;font-size:18px;'>Filter</div>"
-            "<div></div></div>", unsafe_allow_html=True,
+            "<div style='color:#64748b;font-size:12px;margin-bottom:14px;'>Berlaku pada semua tab</div>",
+            unsafe_allow_html=True,
         )
-        st.markdown("<div style='color:#64748b;font-size:12px;margin-bottom:14px;'>Berlaku pada semua tab</div>", unsafe_allow_html=True)
 
         if st.button("Reset filter", width="stretch", key="flt_reset_btn"):
             st.session_state["_filter_reset_pending"] = True
@@ -87,20 +88,6 @@ def render_sidebar() -> dict:
             "Topik", options=[t[0] for t in R.TOPICS],
             default=[t[0] for t in R.TOPICS], key="flt_topics",
         )
-        wilayah = st.multiselect(
-            "Wilayah Koordinasi", options=R.WILAYAH_NAMES,
-            default=R.WILAYAH_NAMES, key="flt_wilayah",
-        )
-
-        with st.expander("Demografi", expanded=False):
-            usia = st.multiselect(
-                "Usia", options=[a[0] for a in R.AGE_BRACKETS],
-                default=[a[0] for a in R.AGE_BRACKETS], key="flt_usia",
-            )
-            gender = st.multiselect(
-                "Jenis Kelamin", options=[g[0] for g in R.GENDERS],
-                default=[g[0] for g in R.GENDERS], key="flt_gender",
-            )
 
         with st.expander("Lainnya", expanded=False):
             requestors = st.multiselect(
@@ -109,10 +96,11 @@ def render_sidebar() -> dict:
             )
 
         st.markdown("---")
-        st.caption("Data sintetis. Demo untuk presentasi klien.")
+        st.caption(
+            "Filter wilayah & demografi tersedia di tab Per Kanal sebagai filter analisa."
+        )
 
     date_range = _resolve_period(period_choice, custom_range)
-    # Resolve comparison range
     if compare_choice == "Bulan sebelumnya":
         compare_range = G.previous_period(date_range)
     elif compare_choice == "Tahun lalu (periode sama)":
@@ -127,9 +115,10 @@ def render_sidebar() -> dict:
         "compare_range": compare_range,
         "channels": channels,
         "topics": topics,
-        "wilayah": wilayah,
-        "usia": usia,
-        "gender": gender,
         "requestors": requestors,
-        "provinces": [],  # legacy field, kept for compat
+        # Empty defaults for analytical filters — only Per Kanal sets them inline
+        "wilayah": [],
+        "usia": [],
+        "gender": [],
+        "provinces": [],
     }

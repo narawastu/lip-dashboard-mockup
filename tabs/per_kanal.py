@@ -11,6 +11,7 @@ from components import header as H
 from components import charts as C
 from components.card import card
 from components.kpi_card import kpi_card
+from components.inline_filters import render_per_kanal_inline, sparse_callout
 
 
 INDEX_COLOR = {
@@ -58,15 +59,16 @@ SAMPLE_COMMENTS_BY_CHANNEL = {
 }
 
 
-def _scope_global(tickets, filters):
-    """Apply non-channel filters from sidebar (kept channel free for the per-kanal selector)."""
+def _scope_global(tickets, filters, inline_filters=None):
+    """Apply non-channel filters: sidebar (topics, requestors, period) + inline (wilayah, usia, gender)."""
+    inline = inline_filters or {}
     return G.filter_tickets(
         tickets,
         topics=filters["topics"],
         requestors=filters["requestors"],
-        wilayah=filters["wilayah"] or None,
-        usia=filters["usia"] or None,
-        gender=filters["gender"] or None,
+        wilayah=inline.get("wilayah") or None,
+        usia=inline.get("usia") or None,
+        gender=inline.get("gender") or None,
         date_range=filters["date_range"],
     )
 
@@ -84,11 +86,15 @@ def render(tickets: pd.DataFrame, filters: dict) -> None:
             key="per_kanal_channel",
         )
 
-    df_global = _scope_global(tickets, filters)
+    # Inline filter row — wilayah / usia / gender — page-scoped, not global
+    inline_filters = render_per_kanal_inline()
+
+    df_global = _scope_global(tickets, filters, inline_filters)
     df = df_global[df_global["channel"] == channel]
 
-    if len(df) == 0:
-        st.info("Tidak ada data untuk kombinasi filter ini.")
+    # Sparse / empty state callout
+    halt = sparse_callout(len(df), threshold=30)
+    if halt:
         return
 
     compare_range = filters["compare_range"]
@@ -102,8 +108,9 @@ def render(tickets: pd.DataFrame, filters: dict) -> None:
         if compare_range:
             base = G.filter_tickets(
                 tickets, topics=filters["topics"], requestors=filters["requestors"],
-                wilayah=filters["wilayah"] or None,
-                usia=filters["usia"] or None, gender=filters["gender"] or None,
+                wilayah=inline_filters["wilayah"] or None,
+                usia=inline_filters["usia"] or None,
+                gender=inline_filters["gender"] or None,
                 date_range=compare_range,
             )
             base = base[base["channel"] == channel]
