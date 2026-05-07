@@ -12,7 +12,7 @@ import theme as T
 from data import generator as G
 from components import header as H
 from components.filters import render_sidebar
-from tabs import overview, sxi, ssi, export, operations, per_kanal
+from tabs import overview, sxi, ssi, export, per_kanal
 
 
 def main() -> None:
@@ -38,13 +38,12 @@ def main() -> None:
         social = G.generate_social()
 
     # Tabs
-    t1, t2, t3, t4, t5, t6 = st.tabs([
+    t1, t2, t3, t4, t5 = st.tabs([
         "📊 Ringkasan Eksekutif",
         "⭐ Detail Indeks",
         "🎯 Per Kanal",
         "💬 SSI · Sentimen Publik",
         "🖼️ Ekspor Infografis",
-        "⚙️ Operasional & Drill-Down",
     ])
 
     with t1:
@@ -57,8 +56,6 @@ def main() -> None:
         ssi.render(social, filters)
     with t5:
         export.render(tickets, social)
-    with t6:
-        operations.render(tickets, filters)
 
 
 if __name__ == "__main__":
